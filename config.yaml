@@ -1,0 +1,35 @@
+# Jarvis configuration. Secrets live in .env (API key, tokens, ntfy topic).
+user_name: "sir"            # how Jarvis addresses you
+city: ""                    # default city for weather, e.g. "Tehran"
+timezone: ""                # blank = system timezone
+
+brain:
+  model: claude-opus-5-5    # alternatives: claude-sonnet-5-5, claude-haiku-5-5 (cheaper/faster)
+  effort: low               # low | medium | high — low keeps voice replies fast
+  max_tokens: 16000
+  session_idle_minutes: 15  # start a fresh conversation after this much silence
+  web_search: true
+
+voice:
+  wake_word: hey_jarvis
+  wake_threshold: 0.5       # lower = more sensitive (0.3–0.7)
+  tts_engine: piper         # piper | say
+  piper_voice: en_GB-alan-medium
+  piper_speaker: null       # for multi-speaker voices (semaine: 1=spike, 2=obadiah)
+  speed: 1.0                # length scale: <1 faster, >1 slower
+  say_voice: Daniel         # macOS fallback voice
+  whisper_model: base.en    # base.en (fast) | small.en (more accurate, ~3x slower)
+  silence_ms: 800           # end-of-speech silence
+  max_listen_s: 15
+  follow_up_s: 5            # listen this long after answering without needing the wake word
+
+server:
+  host: 0.0.0.0
+  port: 8765
+
+notifications:
+  ntfy_server: https://ntfy.sh   # topic is JARVIS_NTFY_TOPIC in .env
+
+briefing:
+  enabled: true
+  time: "08:00"
