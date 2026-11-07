@@ -190,3 +190,78 @@ async def ws_endpoint(ws: WebSocket):
         pass
     finally:
         _sockets.discard(ws)
+
+
+# ---------------------------------------------------------------- Jarvis Phone (Android app)
+def cert_pin() -> str:
+    """SHA-256 of the server certificate (the Android app pins it, so the self-signed cert is safe)."""
+    import hashlib
+    import ssl
+
+    from .. import config
+
+    cert = config.DATA_DIR / "cert.pem"
+    if not cert.exists():
+        return ""
+    der = ssl.PEM_cert_to_DER_cert(cert.read_text())
+    return hashlib.sha256(der).hexdigest()
+
+
+def apk_path() -> Path:
+    from .. import config
+    return config.DATA_DIR / "jarvis-phone.apk"
+
+
+@app.get("/phone-setup")
+async def phone_setup(request: Request):
+    _require(request)
+    from urllib.parse import quote
+
+    base = f"https://{request.headers.get('host', request.url.netloc)}"
+    pair = f"jarvis://pair?url={quote(base, safe='')}&token={quote(_req_token(request) or '', safe='')}&pin={cert_pin()}"
+    have_apk = apk_path().exists()
+    html = f"""<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Jarvis Phone setup</title><style>body{{background:#05080d;color:#d8e6f3;font:17px/1.5 -apple-system,Roboto,sans-serif;padding:24px;max-width:520px;margin:auto}}
+a.b{{display:block;text-align:center;background:#38c6ff;color:#022;font-weight:600;padding:16px;border-radius:14px;text-decoration:none;margin:14px 0}}
+small{{color:#6f8399}}</style></head><body>
+<h2>Jarvis Phone</h2>
+<p><b>1.</b> Install the app{'' if have_apk else ' (not built yet: run <code>jarvis build-phone</code> on the Mac)'}:</p>
+<a class=b href="/download/jarvis-phone.apk?token={quote(_req_token(request) or '')}">Download Jarvis Phone</a>
+<small>Android will ask to allow installs from Chrome. That's expected for apps outside the Play Store.</small>
+<p><b>2.</b> Open the app once, grant the permissions, then come back here and tap:</p>
+<a class=b href="{pair}">Link to this Mac</a>
+</body></html>"""
+    return Response(html, media_type="text/html")
+
+
+@app.get("/download/jarvis-phone.apk")
+async def download_apk(request: Request):
+    _require(request)
+    if not apk_path().exists():
+        raise HTTPException(404, "APK not built yet - run `jarvis build-phone` on the Mac")
+    return FileResponse(apk_path(), media_type="application/vnd.android.package-archive",
+                        filename="jarvis-phone.apk")
+
+
+@app.websocket("/phone")
+async def phone_ws(ws: WebSocket):
+    from ..phone_link import link
+
+    if not _authorized(ws.query_params.get("token")):
+        await ws.close(code=4401)
+        return
+    await ws.accept()
+    link.attach(ws, asyncio.get_running_loop(), ws.query_params.get("device", "android"))
+    try:
+        while True:
+            msg = json.loads(await ws.receive_text())
+            if msg.get("type") == "ping":
+                await ws.send_text('{"type":"pong"}')
+                continue
+            link.on_message(msg)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        log.exception("phone socket error")
+    finally:
+        link.detach(ws)

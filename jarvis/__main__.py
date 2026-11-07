@@ -9,6 +9,9 @@
   jarvis run               everything: voice + server + scheduler + telegram
   jarvis voices [--set N]  audition / choose Jarvis's voice
   jarvis say TEXT          speak a line
+  jarvis telegram-login    link your own Telegram account (read/reply as you)
+  jarvis build-phone       build the Jarvis Phone Android app
+  jarvis phone-setup       link to install + pair the phone app
   jarvis install-service   start Jarvis automatically at login (launchd)
 """
 from __future__ import annotations
@@ -359,6 +362,10 @@ def cmd_run(args):
     Scheduler(get_brain).start()
     _serve(block=False)
     c.print(f"[green]✓ phone/web server on port {config.get()['server']['port']}")
+    from . import tg_user
+    if tg_user.is_configured():
+        tg = tg_user.get()
+        c.print("[green]✓ Telegram account linked" if not tg._error else f"[yellow]! {tg._error}")
     if os.environ.get("TELEGRAM_BOT_TOKEN"):
         from .telegram_bot import run_bot
         threading.Thread(target=run_bot, daemon=True, name="jarvis-telegram").start()
@@ -413,6 +420,47 @@ def cmd_say(args):
     sp.wait(120)
 
 
+# ---------------------------------------------------------------- telegram account / phone app
+def cmd_telegram_login(args):
+    from . import tg_user
+    if tg_user.credentials() is None and sys.stdin.isatty():
+        print("Create an app at https://my.telegram.org → API development tools (any name works).")
+        api_id = input("api_id: ").strip()
+        api_hash = input("api_hash: ").strip()
+        if api_id.isdigit() and api_hash:
+            config.set_env("TELEGRAM_API_ID", api_id)
+            config.set_env("TELEGRAM_API_HASH", api_hash)
+    tg_user.login()
+
+
+ANDROID_DIR = config.ROOT / "android"
+TOOLCHAIN = Path.home() / ".jarvis-toolchain"
+
+
+def cmd_build_phone(args):
+    env = dict(os.environ, JAVA_HOME=str(TOOLCHAIN / "jdk"), ANDROID_HOME=str(TOOLCHAIN / "android-sdk"))
+    gradle = TOOLCHAIN / "gradle" / "bin" / "gradle"
+    if not gradle.exists():
+        raise SystemExit("Android toolchain missing; run scripts/fetch-android-toolchain.sh first.")
+    r = subprocess.run([str(gradle), "--no-daemon", "-q", "assembleDebug"], cwd=ANDROID_DIR, env=env)
+    if r.returncode != 0:
+        raise SystemExit("Build failed.")
+    apk = ANDROID_DIR / "app/build/outputs/apk/debug/app-debug.apk"
+    import shutil
+    shutil.copy(apk, config.DATA_DIR / "jarvis-phone.apk")
+    print(f"Built {config.DATA_DIR / 'jarvis-phone.apk'} ({apk.stat().st_size // 1024} KB).")
+    print("On the phone, open the setup page from `jarvis phone-setup`, or install over USB: adb install -r data/jarvis-phone.apk")
+
+
+def cmd_phone_setup(args):
+    from dotenv import load_dotenv
+    load_dotenv(config.ENV_PATH, override=True)
+    port = config.get()["server"]["port"]
+    print("With `jarvis run` (or `jarvis serve`) running, open this on your phone (same Wi-Fi):")
+    print(f"  https://{lan_ip()}:{port}/phone-setup?token={os.environ.get('JARVIS_WEB_TOKEN', '')}")
+    print("It lets you download Jarvis Phone and link it to this Mac.")
+
+
 # ---------------------------------------------------------------- launchd
 PLIST = Path.home() / "Library/LaunchAgents/com.jarvis.assistant.plist"
 
@@ -461,6 +509,9 @@ def main(argv=None):
     s = sub.add_parser("run"); s.add_argument("--no-voice", action="store_true"); s.add_argument("--ptt", action="store_true"); s.set_defaults(fn=cmd_run)
     s = sub.add_parser("voices"); s.add_argument("--set"); s.add_argument("--text"); s.set_defaults(fn=cmd_voices)
     s = sub.add_parser("say"); s.add_argument("text", nargs="+"); s.set_defaults(fn=cmd_say)
+    sub.add_parser("telegram-login", help="link your own Telegram account").set_defaults(fn=cmd_telegram_login)
+    sub.add_parser("build-phone", help="build the Android app").set_defaults(fn=cmd_build_phone)
+    sub.add_parser("phone-setup", help="show the phone install/link page").set_defaults(fn=cmd_phone_setup)
     s = sub.add_parser("install-service"); s.add_argument("--no-voice", action="store_true"); s.set_defaults(fn=cmd_install_service)
     sub.add_parser("uninstall-service").set_defaults(fn=cmd_uninstall_service)
     args = p.parse_args(argv)

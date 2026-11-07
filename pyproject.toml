@@ -25,6 +25,7 @@ dependencies = [
   "uvicorn[standard]",
   "python-multipart",
   "python-telegram-bot>=22",
+  "telethon>=1.36",
 ]
 
 [project.optional-dependencies]

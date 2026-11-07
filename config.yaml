@@ -33,3 +33,9 @@ notifications:
 briefing:
   enabled: true
   time: "08:00"
+
+telegram:
+  announce_incoming: true   # read out new private Telegram messages (needs `jarvis telegram-login`)
+
+phone:
+  announce_on_mac: true     # also announce phone calls/SMS on the Mac when Jarvis Phone is linked

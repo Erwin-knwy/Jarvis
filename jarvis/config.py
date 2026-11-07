@@ -43,6 +43,8 @@ DEFAULTS: dict = {
     "server": {"host": "0.0.0.0", "port": 8765},
     "notifications": {"ntfy_topic": "", "ntfy_server": "https://ntfy.sh"},
     "briefing": {"enabled": True, "time": "08:00"},
+    "telegram": {"announce_incoming": True},
+    "phone": {"announce_on_mac": True},
 }
 
 
