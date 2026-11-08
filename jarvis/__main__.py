@@ -120,8 +120,11 @@ def cmd_setup(args):
     cfg = config.get()
     c.rule("[bold cyan]Jarvis setup")
 
-    # API key
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    # Brain: Claude subscription via Claude Code (no key) or an API key
+    from .brain_cc import claude_bin
+    if claude_bin() and not os.environ.get("ANTHROPIC_API_KEY"):
+        c.print("[green]✓ Brain: your Claude subscription via Claude Code (no API key needed)")
+    elif not os.environ.get("ANTHROPIC_API_KEY"):
         c.print("Jarvis needs a Claude API key: https://console.anthropic.com/settings/keys")
         if sys.stdin.isatty():
             import getpass
@@ -198,9 +201,17 @@ def cmd_doctor(args):
 
     import platform
     row("Python", sys.version_info[:2] >= (3, 11), platform.python_version())
-    row("API key", bool(os.environ.get("ANTHROPIC_API_KEY")),
-        "set" if os.environ.get("ANTHROPIC_API_KEY") else "run `jarvis setup` or add to .env")
+    from .brain import choose_backend
+    from .brain_cc import claude_bin
+    backend = choose_backend()
     cfg = config.get()
+    if backend == "claude_code":
+        row("Brain", bool(claude_bin()),
+            f"your Claude subscription via Claude Code ({cfg['brain'].get('claude_code_model', 'sonnet')})")
+    else:
+        row("Brain", bool(os.environ.get("ANTHROPIC_API_KEY")),
+            "Anthropic API key" if os.environ.get("ANTHROPIC_API_KEY") else
+            "no API key and no Claude Code: install Claude Code or run `jarvis setup`")
     try:
         import sounddevice as sd
         dev = sd.query_devices(kind="input")
@@ -240,7 +251,17 @@ def cmd_doctor(args):
     row("Phone notifications", bool(cfg["notifications"].get("ntfy_topic")),
         cfg["notifications"].get("ntfy_topic") or "run `jarvis setup`")
     row("Telegram", bool(os.environ.get("TELEGRAM_BOT_TOKEN")), "optional")
-    if os.environ.get("ANTHROPIC_API_KEY"):
+    if backend == "claude_code" and claude_bin():
+        import time
+        t0 = time.time()
+        r = subprocess.run([claude_bin(), "-p", "Reply with exactly: OK", "--tools", "", "--model", "haiku",
+                            "--strict-mcp-config", "--output-format", "json"],
+                           capture_output=True, text=True, timeout=90, cwd=config.DATA_DIR,
+                           env={k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"})
+        ok = r.returncode == 0 and '"is_error":false' in r.stdout.replace(" ", "")
+        row("Claude Code", ok, f"signed in, answered in {time.time() - t0:.1f}s" if ok else
+            "not working: run `claude` once in a terminal and log in with your Claude account")
+    if backend == "api" and os.environ.get("ANTHROPIC_API_KEY"):
         import time
         import anthropic
         try:
@@ -261,9 +282,16 @@ def cmd_doctor(args):
 
 # ---------------------------------------------------------------- chat / voice
 def _require_key(c):
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        c.print("[yellow]No ANTHROPIC_API_KEY yet — only offline commands (time, timers, volume, notes) "
-                "will work. Run `jarvis setup` to add one.")
+    from .brain import choose_backend
+    from .brain_cc import claude_bin
+    backend = choose_backend()
+    if backend == "claude_code" and claude_bin():
+        c.print("[green]✓ Brain: your Claude subscription (via Claude Code)")
+    elif os.environ.get("ANTHROPIC_API_KEY"):
+        c.print("[green]✓ Brain: Anthropic API")
+    else:
+        c.print("[yellow]No brain configured: only instant commands (Wi-Fi, volume, timers, notes…) will work. "
+                "Install Claude Code and log in, or run `jarvis setup` to add an API key.")
 
 
 def cmd_chat(args):
@@ -314,8 +342,11 @@ def cmd_voice(args, with_scheduler=True):
     if with_scheduler:
         from .scheduler import Scheduler
         Scheduler(get_brain).start()
+    brain = get_brain()
+    if hasattr(brain, "warmup"):
+        brain.warmup("voice")  # start Claude Code now so the first question is quick
     with c.status("Loading voice models…"):
-        va = VoiceAssistant(get_brain(), push_to_talk=args.ptt, console=c)
+        va = VoiceAssistant(brain, push_to_talk=args.ptt, console=c)
     try:
         va.run()
     except KeyboardInterrupt:

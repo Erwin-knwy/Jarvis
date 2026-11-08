@@ -129,7 +129,7 @@ def test_brain_tool_loop(monkeypatch):
 
     b.client = types.SimpleNamespace(beta=types.SimpleNamespace(messages=types.SimpleNamespace(stream=fake_stream)))
     out = []
-    reply = b.ask("note eggs", session="t", on_text=out.append)
+    reply = b.ask("I need eggs for the cake, jot that down somewhere", session="t", on_text=out.append)
     assert reply == "Noted, sir."
     assert "".join(out) == "Noted, sir."
     # history: user, assistant(tool_use), user(tool_result), assistant(text)

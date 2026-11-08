@@ -26,6 +26,9 @@ DEFAULTS: dict = {
         "max_tokens": 16000,
         "session_idle_minutes": 15,
         "web_search": True,
+        "backend": "auto",
+        "claude_code_model": "sonnet",
+        "instant_commands": True,
     },
     "voice": {
         "wake_word": "hey_jarvis",

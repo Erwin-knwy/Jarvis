@@ -4,6 +4,9 @@ city: ""                    # default city for weather, e.g. "Tehran"
 timezone: ""                # blank = system timezone
 
 brain:
+  backend: auto             # auto | claude_code (your Claude subscription, no key) | api (ANTHROPIC_API_KEY)
+  claude_code_model: sonnet # model Claude Code uses: haiku (fastest) | sonnet | opus
+  instant_commands: true    # handle simple commands (wifi off, volume 30, timers…) instantly without AI
   model: claude-opus-5-5    # alternatives: claude-sonnet-5-5, claude-haiku-5-5 (cheaper/faster)
   effort: low               # low | medium | high — low keeps voice replies fast
   max_tokens: 16000

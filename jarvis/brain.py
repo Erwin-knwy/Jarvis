@@ -55,6 +55,8 @@ class Session:
 
 
 class Brain:
+    backend = "api"
+
     def __init__(self):
         cfg = config.get()
         self.cfg = cfg["brain"]
@@ -106,6 +108,13 @@ class Brain:
         on_status: Callable[[str], None] | None = None,
     ) -> str:
         """Send one user utterance; stream reply text via on_text; return the full reply."""
+        if config.get()["brain"].get("instant_commands", True):
+            from . import instant
+            quick = instant.handle(text)
+            if quick:
+                if on_text:
+                    on_text(quick)
+                return quick
         s = self._session(session)
         with s.lock:
             s.last_used = time.time()
@@ -221,9 +230,25 @@ _brain: Brain | None = None
 _brain_lock = threading.Lock()
 
 
-def get_brain() -> Brain:
+def choose_backend() -> str:
+    """"api" (Anthropic API key) or "claude_code" (your Claude subscription via Claude Code)."""
+    import os
+    want = config.get()["brain"].get("backend", "auto")
+    if want in ("api", "claude_code"):
+        return want
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "api"
+    from .brain_cc import claude_bin
+    return "claude_code" if claude_bin() else "api"
+
+
+def get_brain():
     global _brain
     with _brain_lock:
         if _brain is None:
-            _brain = Brain()
+            if choose_backend() == "claude_code":
+                from .brain_cc import ClaudeCodeBrain
+                _brain = ClaudeCodeBrain()
+            else:
+                _brain = Brain()
         return _brain

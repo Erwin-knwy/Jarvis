@@ -9,24 +9,48 @@ On the phone you get an installable app with a hold-to-talk button that speaks b
 plus an optional Telegram bot.
 
 ```
-"Hey Jarvis" ─► openWakeWord ─► Silero VAD ─► faster-whisper ─► Claude + 30 tools ─► Piper voice
+"Hey Jarvis" ─► openWakeWord ─► Silero VAD ─► faster-whisper ─► Claude + 46 tools ─► Piper voice
                        (all local on the Mac)                 (cloud)        (local, streamed per sentence)
 Android app / Telegram ─► HTTPS + WebSocket ─┘
 ```
 
 ## Quick start
 
+No API key needed if you have a Claude subscription (Pro/Max): Jarvis talks to Claude through
+[Claude Code](https://claude.com/claude-code), using the account you're signed into.
+
 ```bash
 cd ~/Documents/GitHub/Jarvis
-source .venv/bin/activate      # Python 3.12 env (already created)
-jarvis setup                   # asks for your Claude API key, downloads models, makes tokens/certs
+source .venv/bin/activate      # Python 3.12 env
+claude                         # once: make sure Claude Code is logged in (then /exit)
+jarvis setup                   # downloads models, makes tokens/certs (skip the API key question)
 jarvis doctor                  # everything green?
-jarvis run                     # voice + phone server + reminders (+ Telegram if configured)
+jarvis run                     # voice + phone server + reminders, then say "Hey Jarvis"
 ```
 
-Get an API key at <https://console.anthropic.com/settings/keys>. On first run, macOS asks for **Microphone** access for your
-terminal (System Preferences → Security & Privacy → Privacy → Microphone). The Calendar, Reminders and Music
-tools ask for **Automation** access the first time they're used.
+On first run, macOS asks for **Microphone** access for your terminal, and later for **Automation**
+(Calendar, Music, System Events) the first time those features are used. Click OK.
+
+**Brains** (`brain.backend` in `config.yaml`):
+- `claude_code` (default when Claude Code is installed): your subscription, no extra cost, uses your plan's limits.
+  About 1–2 s to the first word on follow-ups and about 3 s for the first question. Pick the model with `claude_code_model`.
+- `api`: an Anthropic API key (`jarvis setup`), billed per use, slightly faster.
+- Either way, **instant commands** (below) skip the AI entirely and answer in a fraction of a second, even offline.
+
+## What it can do
+
+| Area | Say… |
+|---|---|
+| **Instant (no AI, works offline)** | "Wi-Fi off", "turn on Bluetooth", "volume 30", "louder", "mute", "brightness 50", "dim the screen", "dark mode on", "set a timer for 10 minutes", "what time is it", "play music", "next song", "what's playing", "open Safari", "lock the screen", "take a screenshot", "battery", "keep the Mac awake for 2 hours", "take a note: …", "weather in London", "open Bluetooth settings", "run the Focus shortcut" |
+| **Mac** | sleep / restart / shut down / empty Trash (asks first), find files ("find my resume and open it"), read or set the clipboard, any **macOS Shortcut** (Focus/Do Not Disturb, HomeKit scenes, anything you build in the Shortcuts app) |
+| **Claude** | "open a Claude Code session in Jarvis and ask it to …", "open Claude", plus general questions and web search |
+| **Organise** | reminders at a time, calendar events, Apple Reminders, notes, long-term memory ("remember that…") |
+| **Messages** | Telegram as you (read, reply after you confirm); SMS and calls through your Android phone |
+| **Phone (Android app)** | announces who's calling, answer / reject / reject-and-text by voice, reads texts and replies by dictation (no AI needed) |
+
+**Phone limits (Android rules, not Jarvis):** since Android 10, apps can't switch Wi-Fi or Bluetooth on their own,
+and only the default assistant (Google Assistant) can be woken by voice from the lock screen.
+So the phone app handles calls and texts, and system toggles happen on the Mac.
 
 ## Commands
 
